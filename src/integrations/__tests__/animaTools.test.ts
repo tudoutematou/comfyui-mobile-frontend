@@ -243,7 +243,7 @@ describe('Anima-Tools mobile adapter', () => {
           name: 'custom-blue-dress',
           nickname: '蓝色礼服',
           customContent: 'blue evening gown, long gloves',
-          preview: '/mobile/api/anima-template-images/blue.png',
+          preview: '/anima-tools/template-images/blue.png',
           previewFile: 'blue.png',
           groupIds: ['default'],
           isCustom: true,
@@ -257,7 +257,7 @@ describe('Anima-Tools mobile adapter', () => {
         id: 'custom-blue-dress',
         name: '蓝色礼服',
         tags: 'blue evening gown, long gloves',
-        preview: '/mobile/api/anima-template-images/blue.png',
+        preview: '/anima-tools/template-images/blue.png',
         isCustom: true,
         customContent: 'blue evening gown, long gloves',
       },
@@ -324,7 +324,7 @@ describe('Anima-Tools mobile adapter', () => {
       .mockResolvedValueOnce({
         ok: true,
         json: vi.fn().mockResolvedValue({
-          preview: '/mobile/api/anima-template-images/cover.png',
+          preview: '/anima-tools/template-images/cover.png',
           filename: 'cover.png',
         }),
       })
@@ -334,11 +334,11 @@ describe('Anima-Tools mobile adapter', () => {
     await expect(
       saveAnimaTemplateImage('2026-07-26/result.png', 'output'),
     ).resolves.toEqual({
-      preview: '/mobile/api/anima-template-images/cover.png',
+      preview: '/anima-tools/template-images/cover.png',
       filename: 'cover.png',
     });
     await expect(deleteAnimaTemplateImage('cover.png')).resolves.toBeUndefined();
-    expect(fetchMock.mock.calls[0]?.[0]).toBe('/mobile/api/anima-template-images');
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/anima-tools/template-images');
     expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({ method: 'DELETE' });
   });
 });

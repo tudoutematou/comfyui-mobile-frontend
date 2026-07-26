@@ -1,10 +1,8 @@
 print("[Mobile Frontend] Loading custom node...")
 import asyncio
-import hashlib
 import mimetypes
 import os
 import shutil
-import time
 import server
 from aiohttp import web
 import folder_paths
@@ -60,8 +58,7 @@ HIDDEN_ITEMS_CACHE_PATH = os.path.join(_MOBILE_USERDATA_DIR, "hidden_items.json"
 FILE_FAVORITES_CACHE_PATH = os.path.join(_MOBILE_USERDATA_DIR, "file_favorites.json")
 INPUT_ALIASES_CACHE_PATH = os.path.join(_MOBILE_USERDATA_DIR, "input_aliases.json")
 FILE_PREFIX_ALIASES_CACHE_PATH = os.path.join(_MOBILE_USERDATA_DIR, "file_prefix_aliases.json")
-ANIMA_TEMPLATE_IMAGES_DIR = os.path.join(_MOBILE_USERDATA_DIR, "anima_template_images")
-ANIMA_TEMPLATE_IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.webp', '.gif'}
+LEGACY_ANIMA_TEMPLATE_IMAGES_DIR = os.path.join(_MOBILE_USERDATA_DIR, "anima_template_images")
 LEGACY_HIDDEN_ITEMS_CACHE_PATHS = [
     os.path.join(EXTENSION_DIR, "hidden_items_cache.json"),
     os.path.join(CACHE_DIR, "hidden_items_cache.json"),
@@ -874,54 +871,12 @@ def setup_mobile_route():
         except Exception as e:
             return web.json_response({"error": str(e)}, status=500)
 
-    async def api_save_anima_template_image(request):
-        """Copy a generated image into durable mobile user data for a template."""
-        try:
-            data = await request.json()
-            path = data.get('path')
-            source = data.get('source', 'output')
-            if not isinstance(path, str) or not path.strip():
-                return web.json_response({"error": "No path provided"}, status=400)
-            if source not in ('output', 'input', 'temp'):
-                return web.json_response({"error": "Invalid source"}, status=400)
-
-            source_dir = _source_base_dir(source, allow_temp=True)
-            src_path = _safe_join(source_dir, path)
-            if src_path is None:
-                return web.json_response({"error": "Access denied"}, status=403)
-            if not os.path.isfile(src_path):
-                return web.json_response({"error": "Source image not found"}, status=404)
-
-            extension = os.path.splitext(src_path)[1].lower()
-            if extension not in ANIMA_TEMPLATE_IMAGE_EXTENSIONS:
-                return web.json_response({"error": "Source must be an image"}, status=400)
-
-            digest = hashlib.sha256(
-                f"{time.time_ns()}:{src_path}".encode('utf-8')
-            ).hexdigest()[:24]
-            filename = f"{digest}{extension}"
-            dst_path = _safe_join(ANIMA_TEMPLATE_IMAGES_DIR, filename)
-            if dst_path is None:
-                return web.json_response({"error": "Invalid destination"}, status=400)
-
-            def _copy_template_image():
-                os.makedirs(ANIMA_TEMPLATE_IMAGES_DIR, exist_ok=True)
-                shutil.copy2(src_path, dst_path)
-
-            loop = asyncio.get_event_loop()
-            await loop.run_in_executor(None, _copy_template_image)
-            return web.json_response({
-                "preview": f"/mobile/api/anima-template-images/{filename}",
-                "filename": filename,
-            })
-        except Exception as e:
-            return web.json_response({"error": str(e)}, status=500)
-
-    async def api_get_anima_template_image(request):
+    async def api_get_legacy_anima_template_image(request):
+        """Read-only compatibility for templates saved by older mobile builds."""
         filename = request.match_info.get('filename', '')
         if not filename or filename != os.path.basename(filename):
             return web.Response(status=400, text='Invalid filename')
-        path = _safe_join(ANIMA_TEMPLATE_IMAGES_DIR, filename)
+        path = _safe_join(LEGACY_ANIMA_TEMPLATE_IMAGES_DIR, filename)
         if path is None:
             return web.Response(status=403, text='Access denied')
         if not os.path.isfile(path):
@@ -932,26 +887,6 @@ def setup_mobile_route():
             response.content_type = content_type
         response.headers['Cache-Control'] = 'public, max-age=31536000, immutable'
         return response
-
-    async def api_delete_anima_template_image(request):
-        try:
-            data = await request.json()
-            filename = data.get('filename')
-            if (
-                not isinstance(filename, str)
-                or not filename
-                or filename != os.path.basename(filename)
-            ):
-                return web.json_response({"error": "Invalid filename"}, status=400)
-            path = _safe_join(ANIMA_TEMPLATE_IMAGES_DIR, filename)
-            if path is None:
-                return web.json_response({"error": "Access denied"}, status=403)
-            if not os.path.exists(path):
-                return web.json_response({"error": "Image not found"}, status=404)
-            os.remove(path)
-            return web.json_response({"success": True})
-        except Exception as e:
-            return web.json_response({"error": str(e)}, status=500)
 
     async def api_restart_server(request):
         try:
@@ -1173,9 +1108,10 @@ def setup_mobile_route():
     mobile_app.router.add_post('/api/workflows/folder', api_create_workflow_folder)
     mobile_app.router.add_delete('/api/workflows/folder', api_delete_workflow_folder)
     mobile_app.router.add_post('/api/files/copy-to-input', api_copy_file_to_input)
-    mobile_app.router.add_post('/api/anima-template-images', api_save_anima_template_image)
-    mobile_app.router.add_get('/api/anima-template-images/{filename}', api_get_anima_template_image)
-    mobile_app.router.add_delete('/api/anima-template-images', api_delete_anima_template_image)
+    mobile_app.router.add_get(
+        '/api/anima-template-images/{filename}',
+        api_get_legacy_anima_template_image,
+    )
     mobile_app.router.add_post('/api/restart', api_restart_server)
     mobile_app.router.add_get('/api/models/health-check', api_models_health)
     mobile_app.router.add_get('/api/models/previews', api_models_preview)

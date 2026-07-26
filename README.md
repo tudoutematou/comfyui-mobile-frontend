@@ -56,6 +56,12 @@ So this mobile frontend is my attempt at improving upon the user experience of C
 ### ☑️ **LoraManager Support:** First-class support for LoraManager nodes and websocket integration
 - a rich model/LoRA picker with thumbnails, version, and base-model badges (works with or without LoRA Manager)
 ### ☑️ **Custom Nodes Manager:** Browse, install, update, enable/disable, and uninstall custom nodes from the app
+### ☑️ **Prompt Tool Integrations:** Mobile adapters for common prompt-focused custom nodes
+  - `ComfyUI-Custom-Scripts` autocomplete suggestions inside mobile text widgets, without changing the upstream suggestion provider
+  - `Comfyui-Anima-Tools` character, clothing, pose, background, and artist selectors with touch-friendly dialogs
+  - Chinese aliases for searchable selector names (artist names remain unchanged), full pagination instead of an 80-card limit, and favorite/collection management
+  - personal prompt templates can store a title, prompt tags, and one generated image; image persistence is provided by the compatible `Comfyui-Anima-Tools` fork at `/anima-tools/template-images`
+  - read-only support remains for template images saved by older mobile builds at `/mobile/api/anima-template-images/{filename}`
 ### ☑️ **Dark Theme:** A slate/cyan dark UI tuned for mobile
 
 ## Planned Features

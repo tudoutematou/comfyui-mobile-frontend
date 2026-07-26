@@ -67,7 +67,7 @@ export interface AnimaPage<T> {
 
 const EXTENSION_JS_BASE = '/extensions/Comfyui-Anima-Tools';
 const FAVORITES_API = '/anima-tools/favorites';
-const TEMPLATE_IMAGES_API = '/mobile/api/anima-template-images';
+const TEMPLATE_IMAGES_API = '/anima-tools/template-images';
 
 const CHINESE_NAME_GLOSSARY: Array<[string, string]> = [
   ['Criss-Cross Halter', '交叉吊带'],
