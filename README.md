@@ -50,6 +50,8 @@ So this mobile frontend is my attempt at improving upon the user experience of C
   - download outputs directly to your device with one click
   - Load workflows from images, or pull images directly into workflows as inputs, hassle-free
 ### ☑️ **Outputs/Inputs Browser:** Inspect your server's outputs and inputs folders
+  - open **Media assets** directly from the app menu instead of relying on a hidden swipe gesture or the paged run-history viewer
+  - browse the complete current folder; large folders render progressively as you scroll without a fixed file-count cap
   - search/filter/sort your outputs or inputs — including search by the prompt baked into an image
   - perform bulk operations like moves, deletes, and downloads (range-select a whole run at once)
   - download outputs to your device (iOS share sheet for saving to Photos/Files)

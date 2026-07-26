@@ -18,6 +18,8 @@ import { useGenerationSettingsStore } from '@/hooks/useGenerationSettings';
 import { obfuscateWorkflowInputPaths } from '@/utils/inputPathAliases';
 import { readWorkflowFromFile } from '@/utils/workflowFromFile';
 import { useNoWorkflowImageModal } from '@/hooks/useNoWorkflowImageModal';
+import { useNavigationStore } from '@/hooks/useNavigation';
+import { useOutputsStore } from '@/hooks/useOutputs';
 import type { Workflow } from '@/api/types';
 import {
   listUserWorkflows,
@@ -93,6 +95,7 @@ export function AppMenu({
   const currentFilename = useWorkflowStore((s) => s.currentFilename);
   const originalWorkflow = useWorkflowStore((s) => s.originalWorkflow);
   const setSavedWorkflow = useWorkflowStore((s) => s.setSavedWorkflow);
+  const setCurrentPanel = useNavigationStore((s) => s.setCurrentPanel);
   const pasteTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   const isDirty = isWorkflowModified(workflow, originalWorkflow);
@@ -436,6 +439,16 @@ export function AppMenu({
     }
   };
 
+  const handleOpenMediaAssets = () => {
+    // The queue/history viewer intentionally pages execution history. The
+    // Outputs panel is the complete filesystem-backed media browser, so refresh
+    // it whenever this explicit entry point is used.
+    useOutputsStore.getState().refresh();
+    setCurrentPanel('outputs');
+    onClose();
+    vibrate(10);
+  };
+
   return (
     <>
     <SlidePanel open={open} onClose={onClose} side="left" title="ComfyUI Mobile">
@@ -471,6 +484,7 @@ export function AppMenu({
           onRestartServer={handleRestartServer}
           onOpenGenerationSettings={() => setActiveTab('generationSettings')}
           onOpenCustomNodes={() => setCustomNodesOpen(true)}
+          onOpenMediaAssets={handleOpenMediaAssets}
         />
       )}
       {activeTab === 'userWorkflows' && (
