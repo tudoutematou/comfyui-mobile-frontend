@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { isAutocompletePlusAvailable } from '@/api/autocompletePlusClient';
+import {
+  isAutocompletePlusAvailable,
+  isCustomScriptsAvailable,
+} from '@/api/autocompletePlusClient';
 import { getAppPreferences } from '@/api/client/preferences';
 import { useAutocompleteStore } from '../useAutocompleteStore';
 
@@ -8,6 +11,7 @@ vi.mock('@/api/autocompletePlusClient', () => ({
   fetchEmbeddingNames: vi.fn(async () => []),
   fetchLoraNames: vi.fn(async () => []),
   isAutocompletePlusAvailable: vi.fn(async () => true),
+  isCustomScriptsAvailable: vi.fn(async () => false),
 }));
 
 vi.mock('@/api/client/preferences', () => ({
@@ -16,12 +20,14 @@ vi.mock('@/api/client/preferences', () => ({
 }));
 
 const isAutocompletePlusAvailableMock = vi.mocked(isAutocompletePlusAvailable);
+const isCustomScriptsAvailableMock = vi.mocked(isCustomScriptsAvailable);
 const getAppPreferencesMock = vi.mocked(getAppPreferences);
 
 beforeEach(() => {
   vi.clearAllMocks();
   useAutocompleteStore.setState({
     available: false,
+    provider: null,
     enabled: false,
     initStatus: 'idle',
     dataStatus: 'idle',
@@ -29,6 +35,8 @@ beforeEach(() => {
     loras: [],
     embeddings: [],
   });
+  isAutocompletePlusAvailableMock.mockResolvedValue(true);
+  isCustomScriptsAvailableMock.mockResolvedValue(false);
 });
 
 describe('useAutocompleteStore', () => {
@@ -48,5 +56,18 @@ describe('useAutocompleteStore', () => {
       initStatus: 'ready',
     });
     expect(isAutocompletePlusAvailableMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('falls back to ComfyUI-Custom-Scripts when Autocomplete-Plus is unavailable', async () => {
+    isAutocompletePlusAvailableMock.mockResolvedValue(false);
+    isCustomScriptsAvailableMock.mockResolvedValue(true);
+
+    await useAutocompleteStore.getState().ensureInitialized();
+
+    expect(useAutocompleteStore.getState()).toMatchObject({
+      available: true,
+      provider: 'custom-scripts',
+      initStatus: 'ready',
+    });
   });
 });

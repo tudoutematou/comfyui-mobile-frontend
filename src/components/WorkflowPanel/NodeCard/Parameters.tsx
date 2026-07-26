@@ -36,6 +36,7 @@ import {
   normalizeTriggerWordEntry
 } from '@/utils/triggerWordToggle';
 import { FastGroupsBypasserControls } from './FastGroupsBypasserControls';
+import { AnimaToolsMobileSelector } from './AnimaToolsMobileSelector';
 
 interface WidgetDescriptor {
   widgetIndex: number;
@@ -123,6 +124,13 @@ export function NodeCardParameters({
   const widgetsToRender = hideSeedInputWidget
     ? visibleWidgets.filter((widget) => widget.name !== 'seed' && widget.name !== 'noise_seed')
     : visibleWidgets;
+  const animaSelectorWidgets = useMemo(() => {
+    const byName = new Map<string, WidgetDescriptor>();
+    [...inputWidgetsToRender, ...widgetsToRender].forEach((widget) => {
+      if (!byName.has(widget.name)) byName.set(widget.name, widget);
+    });
+    return Array.from(byName.values());
+  }, [inputWidgetsToRender, widgetsToRender]);
   const showParameters = visibleWidgets.length > 0 || visibleInputWidgets.length > 0;
   const inSubgraphScope = scopeStack[scopeStack.length - 1]?.type === 'subgraph';
   const promotedWidgetNames = useMemo(() => {
@@ -591,6 +599,12 @@ export function NodeCardParameters({
           <div className="text-xs text-slate-400 mb-1.5 uppercase tracking-wide">
             Parameters
           </div>
+          <AnimaToolsMobileSelector
+            nodeType={node.type}
+            widgets={animaSelectorWidgets}
+            disabled={isBypassed}
+            onUpdateNodeWidget={onUpdateNodeWidget}
+          />
           {isKSampler && workflowExists && nodeTypesExists && (() => {
             const seedIndex = getWidgetIndexForInput('seed');
             if (seedIndex === null) return null;

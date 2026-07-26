@@ -58,6 +58,7 @@ HIDDEN_ITEMS_CACHE_PATH = os.path.join(_MOBILE_USERDATA_DIR, "hidden_items.json"
 FILE_FAVORITES_CACHE_PATH = os.path.join(_MOBILE_USERDATA_DIR, "file_favorites.json")
 INPUT_ALIASES_CACHE_PATH = os.path.join(_MOBILE_USERDATA_DIR, "input_aliases.json")
 FILE_PREFIX_ALIASES_CACHE_PATH = os.path.join(_MOBILE_USERDATA_DIR, "file_prefix_aliases.json")
+LEGACY_ANIMA_TEMPLATE_IMAGES_DIR = os.path.join(_MOBILE_USERDATA_DIR, "anima_template_images")
 LEGACY_HIDDEN_ITEMS_CACHE_PATHS = [
     os.path.join(EXTENSION_DIR, "hidden_items_cache.json"),
     os.path.join(CACHE_DIR, "hidden_items_cache.json"),
@@ -870,6 +871,23 @@ def setup_mobile_route():
         except Exception as e:
             return web.json_response({"error": str(e)}, status=500)
 
+    async def api_get_legacy_anima_template_image(request):
+        """Read-only compatibility for templates saved by older mobile builds."""
+        filename = request.match_info.get('filename', '')
+        if not filename or filename != os.path.basename(filename):
+            return web.Response(status=400, text='Invalid filename')
+        path = _safe_join(LEGACY_ANIMA_TEMPLATE_IMAGES_DIR, filename)
+        if path is None:
+            return web.Response(status=403, text='Access denied')
+        if not os.path.isfile(path):
+            return web.Response(status=404, text='Not found')
+        response = web.FileResponse(path)
+        content_type, _ = mimetypes.guess_type(path)
+        if content_type:
+            response.content_type = content_type
+        response.headers['Cache-Control'] = 'public, max-age=31536000, immutable'
+        return response
+
     async def api_restart_server(request):
         try:
             data = await request.json()
@@ -1090,6 +1108,10 @@ def setup_mobile_route():
     mobile_app.router.add_post('/api/workflows/folder', api_create_workflow_folder)
     mobile_app.router.add_delete('/api/workflows/folder', api_delete_workflow_folder)
     mobile_app.router.add_post('/api/files/copy-to-input', api_copy_file_to_input)
+    mobile_app.router.add_get(
+        '/api/anima-template-images/{filename}',
+        api_get_legacy_anima_template_image,
+    )
     mobile_app.router.add_post('/api/restart', api_restart_server)
     mobile_app.router.add_get('/api/models/health-check', api_models_health)
     mobile_app.router.add_get('/api/models/previews', api_models_preview)

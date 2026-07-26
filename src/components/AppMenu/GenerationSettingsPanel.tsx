@@ -92,8 +92,8 @@ export function GenerationSettingsPanel({ onBack }: GenerationSettingsPanelProps
   const obfuscateSharedInputPaths = useGenerationSettingsStore((s) => s.obfuscateSharedInputPaths);
   const setObfuscateSharedInputPaths = useGenerationSettingsStore((s) => s.setObfuscateSharedInputPaths);
 
-  // Autocomplete opt-in (server-synced). Only surfaced when the
-  // ComfyUI-Autocomplete-Plus node is detected on this server.
+  // Autocomplete opt-in (server-synced). Only surfaced when a supported
+  // autocomplete provider is detected on this server.
   const autocompleteAvailable = useAutocompleteStore((s) => s.available);
   const autocompleteEnabled = useAutocompleteStore((s) => s.enabled);
   const setAutocompleteEnabled = useAutocompleteStore((s) => s.setEnabled);
@@ -200,7 +200,7 @@ export function GenerationSettingsPanel({ onBack }: GenerationSettingsPanelProps
         {autocompleteAvailable && (
           <PreferenceSection
             label="Tag autocomplete"
-            description="Suggest Danbooru tags, LoRAs, and embeddings while typing prompts. Powered by the detected ComfyUI-Autocomplete-Plus node."
+            description="Suggest tags, LoRAs, and embeddings while typing prompts. Uses the autocomplete provider detected on this server."
             checked={autocompleteEnabled}
             onToggle={() => void setAutocompleteEnabled(!autocompleteEnabled)}
           />

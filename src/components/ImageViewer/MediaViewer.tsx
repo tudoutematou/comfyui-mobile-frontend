@@ -43,6 +43,7 @@ const MEDIA_VIEWER_Z_INDEX = 2100;
 const MEDIA_VIEWER_OVERLAY_Z_INDEX = MEDIA_VIEWER_Z_INDEX + 10;
 const PRELOAD_IMAGE_COUNT_PER_SIDE = 2;
 const PRELOAD_RETENTION_INDEX_BUFFER = 3;
+const IMAGE_RETRY_DELAYS_MS = [400, 1000, 2000] as const;
 // Cap the "already decoded" hint map so a long browse over a huge folder doesn't
 // grow it unbounded. It only suppresses a spinner flash, so resetting on overflow
 // is harmless (at worst a brief spinner if a dropped image is revisited).
@@ -62,6 +63,15 @@ function isEditableElement(element: HTMLElement | null): boolean {
 function getFullScreenImageSrc(item: ViewerImage): string {
   const name = item.filename ?? item.file?.name ?? item.src;
   return /\.jpe?g(?:$|[?#])/i.test(name) ? item.src : (item.displaySrc ?? item.src);
+}
+
+function withImageRetryToken(src: string, token: number): string {
+  if (token <= 0) return src;
+  const hashIndex = src.indexOf('#');
+  const base = hashIndex >= 0 ? src.slice(0, hashIndex) : src;
+  const hash = hashIndex >= 0 ? src.slice(hashIndex) : '';
+  const separator = base.includes('?') ? '&' : '?';
+  return `${base}${separator}_comfy_mobile_retry=${token}${hash}`;
 }
 
 function isViewerVideo(item: ViewerImage): boolean {
@@ -103,6 +113,8 @@ export function MediaViewer({
   const adjacentPreloadsRef = useRef<
     Map<string, { image: HTMLImageElement; itemIndex: number }>
   >(new Map());
+  const imageRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const imageRetryTokenRef = useRef(0);
   // MediaViewer remounts whenever the viewer opens (ImageViewer returns null
   // when closed), so initializing from props is sufficient — no useLayoutEffect
   // needed to re-sync. Re-syncing on every initialScale/initialTranslate prop
@@ -144,12 +156,27 @@ export function MediaViewer({
   // so swiping back to an already-loaded image hides it even though a
   // swiped-past image keeps loading in the background.
   const [loadedSrcs, setLoadedSrcs] = useState<Record<string, true>>({});
+  const [imageRetryState, setImageRetryState] = useState<{
+    src: string;
+    attempts: number;
+    token: number;
+    failed: boolean;
+  } | null>(null);
   const markLoaded = useCallback((src: string | null | undefined) => {
     if (!src) return;
     setLoadedSrcs((prev) => {
       if (prev[src]) return prev;
       if (Object.keys(prev).length >= LOADED_SRCS_MAX) return { [src]: true };
       return { ...prev, [src]: true };
+    });
+  }, []);
+  const markPending = useCallback((src: string | null | undefined) => {
+    if (!src) return;
+    setLoadedSrcs((prev) => {
+      if (!prev[src]) return prev;
+      const next = { ...prev };
+      delete next[src];
+      return next;
     });
   }, []);
   const { isInputFocused } = useTextareaFocus();
@@ -200,6 +227,13 @@ export function MediaViewer({
   }, [isCurrentImageLoading]);
   const renderIsVideo = Boolean(renderItem && isViewerVideo(renderItem));
   const renderFullSrc = renderItem && !renderIsVideo ? getFullScreenImageSrc(renderItem) : null;
+  const currentImageRetryState =
+    renderFullSrc && imageRetryState?.src === renderFullSrc ? imageRetryState : null;
+  const renderRequestSrc =
+    renderFullSrc && currentImageRetryState
+      ? withImageRetryToken(renderFullSrc, currentImageRetryState.token)
+      : renderFullSrc;
+  const currentImageFailed = Boolean(currentImageRetryState?.failed);
   const fileId = currentItem?.file?.id ?? null;
   const fetchedMetadata = fileId ? metadataById[fileId] : undefined;
   const metadata = currentItem?.metadata ?? (fetchedMetadata === undefined ? undefined : fetchedMetadata);
@@ -787,7 +821,13 @@ export function MediaViewer({
     // The visible <img> is the only thing that marks the *current* src loaded on
     // the no-swap path (initial open / follow-queue). Key off the same helper the
     // spinner uses, not img.src, so the absolute-resolved URL doesn't mismatch.
-    markLoaded(renderItem ? getFullScreenImageSrc(renderItem) : null);
+    const loadedSrc = renderItem ? getFullScreenImageSrc(renderItem) : null;
+    if (imageRetryTimerRef.current) {
+      clearTimeout(imageRetryTimerRef.current);
+      imageRetryTimerRef.current = null;
+    }
+    setImageRetryState((prev) => (prev?.src === loadedSrc ? null : prev));
+    markLoaded(loadedSrc);
     naturalSizeRef.current = { width: img.naturalWidth, height: img.naturalHeight };
     if (img.naturalWidth > 0 && img.naturalHeight > 0) {
       setNaturalSize({ width: img.naturalWidth, height: img.naturalHeight });
@@ -800,6 +840,67 @@ export function MediaViewer({
     setBaseSize({ width: containerWidth, height: img.naturalHeight * ratio });
     setContainerSize({ width: containerWidth, height: containerHeight });
   };
+
+  const handleImageError = () => {
+    if (!renderFullSrc) return;
+    if (imageRetryTimerRef.current) {
+      clearTimeout(imageRetryTimerRef.current);
+      imageRetryTimerRef.current = null;
+    }
+    markPending(renderFullSrc);
+
+    const attempts =
+      imageRetryState?.src === renderFullSrc ? imageRetryState.attempts : 0;
+    if (attempts >= IMAGE_RETRY_DELAYS_MS.length) {
+      markLoaded(renderFullSrc);
+      setImageRetryState({
+        src: renderFullSrc,
+        attempts,
+        token: imageRetryState?.token ?? 0,
+        failed: true,
+      });
+      resetIdleTimer();
+      return;
+    }
+
+    const delay = IMAGE_RETRY_DELAYS_MS[attempts];
+    imageRetryTimerRef.current = setTimeout(() => {
+      imageRetryTimerRef.current = null;
+      imageRetryTokenRef.current += 1;
+      setImageRetryState({
+        src: renderFullSrc,
+        attempts: attempts + 1,
+        token: imageRetryTokenRef.current,
+        failed: false,
+      });
+    }, delay);
+  };
+
+  const retryFailedImage = () => {
+    if (!renderFullSrc) return;
+    if (imageRetryTimerRef.current) {
+      clearTimeout(imageRetryTimerRef.current);
+      imageRetryTimerRef.current = null;
+    }
+    imageRetryTokenRef.current += 1;
+    markPending(renderFullSrc);
+    setImageRetryState({
+      src: renderFullSrc,
+      attempts: 0,
+      token: imageRetryTokenRef.current,
+      failed: false,
+    });
+    resetIdleTimer();
+  };
+
+  useEffect(() => {
+    return () => {
+      if (imageRetryTimerRef.current) {
+        clearTimeout(imageRetryTimerRef.current);
+        imageRetryTimerRef.current = null;
+      }
+    };
+  }, [renderFullSrc]);
 
   useEffect(() => {
     if (renderIsVideo) return;
@@ -1163,11 +1264,12 @@ export function MediaViewer({
             ) : (
               <img
                 ref={imageRef}
-                src={getFullScreenImageSrc(renderItem)}
+                src={renderRequestSrc ?? getFullScreenImageSrc(renderItem)}
                 alt={renderItem.alt || 'Generation'}
                 className="w-full h-auto block select-none relative"
                 draggable={false}
                 onLoad={handleImageLoad}
+                onError={handleImageError}
                 style={{
                   transform: `translate3d(${getBaseOffset(scale).x + translate.x}px, ${getBaseOffset(scale).y + translate.y}px, 0) scale(${scale})`,
                   transformOrigin: 'top left',
@@ -1192,6 +1294,26 @@ export function MediaViewer({
               <div className="absolute inset-0 rounded-full border-4 border-cyan-400/25" />
               <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-cyan-300 animate-spin" />
             </div>
+          </div>
+        )}
+
+        {!showLoadingPlaceholder && currentImageFailed && (
+          <div
+            role="alert"
+            className="absolute inset-0 z-[3] flex flex-col items-center justify-center bg-black px-6 text-center text-white"
+          >
+            <div className="text-lg font-semibold">图片加载失败</div>
+            <div className="mt-2 max-w-sm text-sm text-slate-400">
+              输出文件可能还没有准备好，或者网络请求被临时中断。
+            </div>
+            <button
+              type="button"
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={retryFailedImage}
+              className="mt-5 rounded-xl border border-cyan-400/70 bg-cyan-500/15 px-5 py-3 font-semibold text-cyan-100"
+            >
+              重新加载图片
+            </button>
           </div>
         )}
       </div>

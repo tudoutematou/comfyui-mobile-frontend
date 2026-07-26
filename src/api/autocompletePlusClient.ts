@@ -1,14 +1,15 @@
-// Client for the ComfyUI-Autocomplete-Plus custom node's HTTP API.
+// Client for supported autocomplete providers' HTTP APIs.
 //
-// That node registers routes at the ComfyUI server root (`/autocomplete-plus/*`)
-// — the same origin this app is served from — and owns the tag data lifecycle
-// (download from HuggingFace, updates, etc.). We consume it read-only: probe for
-// installation, then pull the tag CSV plus lora/embedding name lists. If the
-// node isn't installed every call here fails and the feature stays dark.
+// Prefer ComfyUI-Autocomplete-Plus when installed, and fall back to the local
+// word list exposed by pysssss/ComfyUI-Custom-Scripts. Both providers are read
+// only and served from the same ComfyUI origin as this app.
 
 import type { TagEntry } from '@/utils/autocompleteSearch';
 
-const BASE = '/autocomplete-plus';
+const AUTOCOMPLETE_PLUS_BASE = '/autocomplete-plus';
+const CUSTOM_SCRIPTS_BASE = '/pysssss';
+
+export type AutocompleteProvider = 'autocomplete-plus' | 'custom-scripts';
 
 interface CsvStatus {
   base_tags: boolean;
@@ -27,10 +28,23 @@ interface CsvListResponse {
  */
 export async function isAutocompletePlusAvailable(): Promise<boolean> {
   try {
-    const response = await fetch(`${BASE}/csv`);
+    const response = await fetch(`${AUTOCOMPLETE_PLUS_BASE}/csv`);
     if (!response.ok) return false;
     const data = (await response.json()) as CsvListResponse;
     return Boolean(data?.danbooru?.base_tags);
+  } catch {
+    return false;
+  }
+}
+
+/** Detect the pysssss/ComfyUI-Custom-Scripts word-list endpoint. */
+export async function isCustomScriptsAvailable(): Promise<boolean> {
+  try {
+    const response = await fetch(`${CUSTOM_SCRIPTS_BASE}/autocomplete`, {
+      cache: 'no-store',
+      method: 'HEAD',
+    });
+    return response.ok;
   } catch {
     return false;
   }
@@ -66,26 +80,35 @@ function parseCsvLine(line: string): string[] {
  * Fetch and parse the base danbooru tag table, sorted by post count descending
  * (so search can collect best-first). Header row: `tag,category,count,alias`.
  */
-export async function fetchDanbooruTags(): Promise<TagEntry[]> {
-  const response = await fetch(`${BASE}/csv/danbooru/tags/base`, { cache: 'no-store' });
+export async function fetchDanbooruTags(
+  provider: AutocompleteProvider = 'autocomplete-plus',
+): Promise<TagEntry[]> {
+  const url = provider === 'custom-scripts'
+    ? `${CUSTOM_SCRIPTS_BASE}/autocomplete`
+    : `${AUTOCOMPLETE_PLUS_BASE}/csv/danbooru/tags/base`;
+  const response = await fetch(url, { cache: 'no-store' });
   if (!response.ok) throw new Error(`Failed to fetch tags: ${response.status}`);
   const text = await response.text();
   const lines = text.split('\n');
 
   const entries: TagEntry[] = [];
-  const start = lines[0]?.toLowerCase().startsWith('tag,category,count') ? 1 : 0;
+  const hasHeader = lines[0]?.toLowerCase().startsWith('tag,category,count');
+  const start = hasHeader ? 1 : 0;
   for (let i = start; i < lines.length; i++) {
     const line = lines[i];
     if (!line.trim()) continue;
     const cols = parseCsvLine(line);
-    if (cols.length < 4) continue;
     const tag = cols[0].trim();
-    const count = parseInt(cols[2].trim(), 10);
+    if (!tag) continue;
+
+    const isFourColumn = cols.length >= 4;
+    const countColumn = isFourColumn ? cols[2] : cols[1];
+    const count = parseInt(countColumn?.trim() ?? '0', 10);
     if (!tag || Number.isNaN(count)) continue;
-    const aliasStr = cols[3].trim();
+    const aliasStr = isFourColumn ? cols[3].trim() : '';
     entries.push({
       tag,
-      category: parseInt(cols[1].trim(), 10) || 0,
+      category: isFourColumn ? parseInt(cols[1].trim(), 10) || 0 : 0,
       count,
       aliases: aliasStr ? aliasStr.split(',').map((a) => a.trim()).filter(Boolean) : [],
     });
@@ -99,9 +122,9 @@ export async function fetchDanbooruTags(): Promise<TagEntry[]> {
   return entries;
 }
 
-async function fetchNameList(path: string): Promise<string[]> {
+async function fetchNameList(url: string): Promise<string[]> {
   try {
-    const response = await fetch(`${BASE}/${path}`, { cache: 'no-store' });
+    const response = await fetch(url, { cache: 'no-store' });
     if (!response.ok) return [];
     const data = await response.json();
     return Array.isArray(data) ? data.filter((n): n is string => typeof n === 'string') : [];
@@ -110,10 +133,22 @@ async function fetchNameList(path: string): Promise<string[]> {
   }
 }
 
-export function fetchLoraNames(): Promise<string[]> {
-  return fetchNameList('loras');
+export function fetchLoraNames(
+  provider: AutocompleteProvider = 'autocomplete-plus',
+): Promise<string[]> {
+  return fetchNameList(
+    provider === 'custom-scripts'
+      ? `${CUSTOM_SCRIPTS_BASE}/loras`
+      : `${AUTOCOMPLETE_PLUS_BASE}/loras`,
+  );
 }
 
-export function fetchEmbeddingNames(): Promise<string[]> {
-  return fetchNameList('embeddings');
+export function fetchEmbeddingNames(
+  provider: AutocompleteProvider = 'autocomplete-plus',
+): Promise<string[]> {
+  return fetchNameList(
+    provider === 'custom-scripts'
+      ? '/embeddings'
+      : `${AUTOCOMPLETE_PLUS_BASE}/embeddings`,
+  );
 }

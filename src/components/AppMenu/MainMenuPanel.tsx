@@ -5,6 +5,14 @@ import { MenuServerSection } from './MenuServerSection';
 import { MenuLoadSection } from './MenuLoadSection';
 import { MenuSaveSection } from './MenuSaveSection';
 import { MenuAboutSection } from './MenuAboutSection';
+import { InboxIcon } from '@/components/icons';
+import {
+  menuArrowClassName,
+  menuIconClassName,
+  menuMutedTextClassName,
+  menuSurfaceButtonClassName,
+  menuTextClassName,
+} from './menuStyles';
 
 interface MenuSectionsOpen {
   load: boolean;
@@ -42,6 +50,7 @@ interface MainMenuPanelProps {
   onRestartServer: () => void;
   onOpenGenerationSettings: () => void;
   onOpenCustomNodes: () => void;
+  onOpenMediaAssets: () => void;
 }
 
 export function MainMenuPanel({
@@ -73,10 +82,28 @@ export function MainMenuPanel({
   onRestartServer,
   onOpenGenerationSettings,
   onOpenCustomNodes,
+  onOpenMediaAssets,
 }: MainMenuPanelProps) {
   return (
     <>
       <MenuErrorNotice error={error} onDismiss={onDismissError} />
+
+      <section className="mb-6" aria-label="Media">
+        <button
+          type="button"
+          onClick={onOpenMediaAssets}
+          className={menuSurfaceButtonClassName}
+        >
+          <InboxIcon className={menuIconClassName} />
+          <span className="flex min-w-0 flex-1 flex-col">
+            <span className={menuTextClassName}>Media assets</span>
+            <span className={`text-xs ${menuMutedTextClassName}`}>
+              Browse all generated and imported files
+            </span>
+          </span>
+          <span className={menuArrowClassName}>&rarr;</span>
+        </button>
+      </section>
 
       <MenuServerSection
         open={menuSectionsOpen.server}

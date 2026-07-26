@@ -5404,7 +5404,11 @@ export const useWorkflowStore = create<WorkflowState>()(
                   workflow: queuedWorkflow,
                 },
                 ...(hiddenWorkflow ? { [HIDDEN_WORKFLOW_EXTRA_DATA_KEY]: true } : {}),
-                ...(previewMethod !== 'none' ? { preview_method: previewMethod } : {}),
+                // ComfyUI treats a missing preview_method as "use the server
+                // default". Send "none" explicitly so disabling previews on a
+                // resource-constrained mobile browser really stops the backend
+                // from streaming latent preview frames for every queued job.
+                preview_method: previewMethod,
               },
             };
             const response = await fetch('/api/prompt', {

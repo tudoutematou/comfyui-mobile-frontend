@@ -44,11 +44,14 @@ So this mobile frontend is my attempt at improving upon the user experience of C
   - scroll through generation history and load or copy workflows of anything you want to iterate on
 ### ☑️ **Media Viewer:** Full-screen viewer with convenient controls and familar gesture support
   - support for images and videos
+  - automatically retries output images that are briefly unavailable and provides an in-view retry action instead of leaving a permanent black screen
   - inspect image metadata (just a few core attributes for now)
   - mark outputs as favorites so you can find them with filters later
   - download outputs directly to your device with one click
   - Load workflows from images, or pull images directly into workflows as inputs, hassle-free
 ### ☑️ **Outputs/Inputs Browser:** Inspect your server's outputs and inputs folders
+  - open **Media assets** directly from the app menu instead of relying on a hidden swipe gesture or the paged run-history viewer
+  - browse the complete current folder; large folders render progressively as you scroll without a fixed file-count cap
   - search/filter/sort your outputs or inputs — including search by the prompt baked into an image
   - perform bulk operations like moves, deletes, and downloads (range-select a whole run at once)
   - download outputs to your device (iOS share sheet for saving to Photos/Files)
@@ -56,6 +59,12 @@ So this mobile frontend is my attempt at improving upon the user experience of C
 ### ☑️ **LoraManager Support:** First-class support for LoraManager nodes and websocket integration
 - a rich model/LoRA picker with thumbnails, version, and base-model badges (works with or without LoRA Manager)
 ### ☑️ **Custom Nodes Manager:** Browse, install, update, enable/disable, and uninstall custom nodes from the app
+### ☑️ **Prompt Tool Integrations:** Mobile adapters for common prompt-focused custom nodes
+  - `ComfyUI-Custom-Scripts` autocomplete suggestions inside mobile text widgets, without changing the upstream suggestion provider
+  - `Comfyui-Anima-Tools` character, clothing, pose, background, and artist selectors with touch-friendly dialogs
+  - Chinese aliases for searchable selector names (artist names remain unchanged), full pagination instead of an 80-card limit, and separate favorite/personal-template browsing
+  - personal prompt templates are organized by user-created categories and can store a title, prompt tags, and one generated image; image persistence is provided by the compatible `Comfyui-Anima-Tools` fork at `/anima-tools/template-images`
+  - read-only support remains for template images saved by older mobile builds at `/mobile/api/anima-template-images/{filename}`
 ### ☑️ **Dark Theme:** A slate/cyan dark UI tuned for mobile
 
 ## Planned Features

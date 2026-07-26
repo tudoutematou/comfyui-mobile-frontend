@@ -45,8 +45,8 @@ function formatCount(count?: number): string {
 
 /**
  * A multiline text editor with tag/lora/embedding autocomplete layered on top.
- * The autocomplete only activates when the Autocomplete-Plus node is installed
- * and the server opt-in is on; otherwise this behaves as a plain textarea.
+ * The autocomplete only activates when a supported provider is installed and
+ * the server opt-in is on; otherwise this behaves as a plain textarea.
  *
  * `textareaRef` is owned by the caller (used for auto-grow + TextareaActions) and
  * reused here for caret tracking, so no ref merging is needed.
@@ -81,6 +81,7 @@ export function TagAutocompleteTextarea({
   // would steal that. Enter only accepts once a row is chosen via Arrow keys.
   const [activeIndex, setActiveIndex] = useState(-1);
   const [dismissed, setDismissed] = useState(false);
+  const [composing, setComposing] = useState(false);
   const pendingCaretRef = useRef<number | null>(null);
   const activeItemRef = useRef<HTMLLIElement | null>(null);
 
@@ -90,7 +91,7 @@ export function TagAutocompleteTextarea({
     return getSuggestions(value, caret).suggestions;
   }, [active, dataStatus, value, caret, getSuggestions]);
 
-  const showDropdown = active && focused && !dismissed && suggestions.length > 0;
+  const showDropdown = active && focused && !composing && !dismissed && suggestions.length > 0;
 
   // The dropdown is rendered in a portal with fixed positioning, anchored to the
   // caret's line (not the whole textarea) so it appears right under the line
@@ -183,6 +184,7 @@ export function TagAutocompleteTextarea({
   };
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (composing || event.nativeEvent.isComposing) return;
     if (!showDropdown) return;
     // Escape dismisses just the dropdown; stop it from also closing the editor.
     if (event.key === 'Escape') {
@@ -243,6 +245,15 @@ export function TagAutocompleteTextarea({
           setActiveIndex(-1);
           setDismissed(false);
           onValueChange(e.target.value);
+        }}
+        onCompositionStart={() => {
+          setComposing(true);
+          setActiveIndex(-1);
+        }}
+        onCompositionEnd={(e) => {
+          setComposing(false);
+          setCaret(e.currentTarget.selectionStart ?? e.currentTarget.value.length);
+          setDismissed(false);
         }}
         onKeyUp={syncCaret}
         onClick={syncCaret}
@@ -324,6 +335,12 @@ export function TagAutocompleteTextarea({
                     // preventDefault keeps focus on the textarea so onBlur doesn't
                     // fire and close the dropdown before the tap registers.
                     onMouseDown={(e) => e.preventDefault()}
+                    onPointerDown={(e) => {
+                      if (e.pointerType !== 'mouse') {
+                        e.preventDefault();
+                        accept(suggestion);
+                      }
+                    }}
                     onClick={() => accept(suggestion)}
                     onMouseEnter={() => setActiveIndex(index)}
                   >
