@@ -3,7 +3,9 @@ import {
   fetchDanbooruTags,
   fetchEmbeddingNames,
   fetchLoraNames,
+  isCustomScriptsAvailable,
   isAutocompletePlusAvailable,
+  type AutocompleteProvider,
 } from '@/api/autocompletePlusClient';
 import { getAppPreferences, setAppPreferences } from '@/api/client/preferences';
 import {
@@ -21,8 +23,10 @@ type LoadStatus = 'idle' | 'loading' | 'ready' | 'error';
 const SUGGESTION_LIMIT = 20;
 
 interface AutocompleteState {
-  /** Whether the Autocomplete-Plus node is installed with usable data. */
+  /** Whether a supported autocomplete provider is installed with usable data. */
   available: boolean;
+  /** The detected server-side data source. */
+  provider: AutocompleteProvider | null;
   /** The server-side opt-in preference. */
   enabled: boolean;
   /** Status of the one-time availability + preference probe. */
@@ -48,6 +52,7 @@ interface AutocompleteState {
 
 export const useAutocompleteStore = create<AutocompleteState>((set, get) => ({
   available: false,
+  provider: null,
   enabled: false,
   initStatus: 'idle',
   dataStatus: 'idle',
@@ -60,16 +65,27 @@ export const useAutocompleteStore = create<AutocompleteState>((set, get) => ({
     if (initStatus === 'loading' || initStatus === 'ready') return;
     set({ initStatus: 'loading' });
     try {
-      const [available, prefs] = await Promise.all([
+      const [autocompletePlusAvailable, prefs] = await Promise.all([
         isAutocompletePlusAvailable(),
         getAppPreferences().catch(() => ({ autocompleteEnabled: false })),
       ]);
-      set({ available, enabled: Boolean(prefs.autocompleteEnabled), initStatus: 'ready' });
-      if (available && prefs.autocompleteEnabled) {
+      const provider: AutocompleteProvider | null = autocompletePlusAvailable
+        ? 'autocomplete-plus'
+        : await isCustomScriptsAvailable()
+          ? 'custom-scripts'
+          : null;
+      const available = provider !== null;
+      set({
+        available,
+        provider,
+        enabled: Boolean(prefs.autocompleteEnabled),
+        initStatus: 'ready',
+      });
+      if (provider && prefs.autocompleteEnabled) {
         void get().ensureData();
       }
     } catch {
-      set({ available: false, initStatus: 'error' });
+      set({ available: false, provider: null, initStatus: 'error' });
     }
   },
 
@@ -86,14 +102,18 @@ export const useAutocompleteStore = create<AutocompleteState>((set, get) => ({
   },
 
   ensureData: async () => {
-    const { dataStatus } = get();
+    const { dataStatus, provider } = get();
     if (dataStatus === 'loading' || dataStatus === 'ready') return;
+    if (!provider) {
+      set({ dataStatus: 'error' });
+      return;
+    }
     set({ dataStatus: 'loading' });
     try {
       const [tags, loras, embeddings] = await Promise.all([
-        fetchDanbooruTags(),
-        fetchLoraNames(),
-        fetchEmbeddingNames(),
+        fetchDanbooruTags(provider),
+        fetchLoraNames(provider),
+        fetchEmbeddingNames(provider),
       ]);
       set({ tags, loras, embeddings, dataStatus: 'ready' });
     } catch {

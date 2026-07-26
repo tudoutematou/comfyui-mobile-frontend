@@ -17,9 +17,8 @@ from json_cache_io import atomic_write_json
 _LOG_PREFIX = "[\033[34mMobile\033[0m]"
 
 _DEFAULTS = {
-    # Opt-in: surface tag autocomplete (powered by the ComfyUI-Autocomplete-Plus
-    # custom node) in the mobile prompt editors. Off by default; the frontend
-    # also gates this on the node actually being installed.
+    # Opt-in: surface tag autocomplete in the mobile prompt editors when a
+    # supported provider is installed. Off by default.
     "autocompleteEnabled": False,
 }
 
