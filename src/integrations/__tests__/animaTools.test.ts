@@ -260,6 +260,7 @@ describe('Anima-Tools mobile adapter', () => {
         preview: '/anima-tools/template-images/blue.png',
         isCustom: true,
         customContent: 'blue evening gown, long gloves',
+        groupIds: ['default'],
       },
     ]);
     expect(matchesAnimaItemSearch(items[0]!, 'long gloves')).toBe(true);

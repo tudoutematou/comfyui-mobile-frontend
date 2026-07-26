@@ -19,6 +19,7 @@ import {
   setAnimaItemFavorite,
   type AnimaSelectorConfig,
   type AnimaSelectorItem,
+  type AnimaFavoriteGroup,
   type AnimaFavoriteItem,
   type AnimaFavoritesSection,
 } from '@/integrations/animaTools';
@@ -38,10 +39,12 @@ interface AnimaToolsMobileSelectorProps {
 
 const ITEMS_PER_PAGE = 80;
 const CUSTOM_IMAGE_LIMIT = 120;
+const UNCATEGORIZED_PERSONAL_GROUP = '__uncategorized__';
 
 interface CustomTemplateDraft {
   title: string;
   content: string;
+  groupId: string;
   selectedImage: FileItem | null;
   removeImage: boolean;
 }
@@ -105,16 +108,23 @@ function PaginationControls({
 function CustomTemplateEditor({
   config,
   existing,
+  groups,
+  initialGroupId,
   onClose,
   onSave,
 }: {
   config: AnimaSelectorConfig;
   existing: AnimaFavoriteItem | null;
+  groups: AnimaFavoritesSection['groups'];
+  initialGroupId?: string;
   onClose: () => void;
   onSave: (draft: CustomTemplateDraft) => Promise<void>;
 }) {
   const [title, setTitle] = useState(existing?.nickname?.trim() || '');
   const [content, setContent] = useState(existing?.customContent?.trim() || '');
+  const [groupId, setGroupId] = useState(
+    existing?.groupIds?.find((id) => id !== 'default') || initialGroupId || '',
+  );
   const [selectedImage, setSelectedImage] = useState<FileItem | null>(null);
   const [removeImage, setRemoveImage] = useState(false);
   const [showImagePicker, setShowImagePicker] = useState(false);
@@ -160,12 +170,17 @@ function CustomTemplateEditor({
       setError('请填写提示词内容');
       return;
     }
+    if (!groupId) {
+      setError('请先选择个人模板分类');
+      return;
+    }
     setSaving(true);
     setError('');
     try {
       await onSave({
         title: title.trim(),
         content: content.trim(),
+        groupId,
         selectedImage,
         removeImage,
       });
@@ -223,6 +238,26 @@ function CustomTemplateEditor({
             rows={7}
             className="w-full resize-y rounded-xl border border-slate-600 bg-slate-900 px-3 py-3 text-base outline-none focus:border-cyan-400"
           />
+        </label>
+        <label className="block">
+          <span className="mb-1.5 block text-sm text-slate-300">所属个人分类</span>
+          <select
+            value={groupId}
+            onChange={(event) => setGroupId(event.target.value)}
+            className="w-full rounded-xl border border-slate-600 bg-slate-900 px-3 py-3 text-base outline-none focus:border-cyan-400"
+          >
+            <option value="">请选择分类</option>
+            {groups.map((group) => (
+              <option key={group.id} value={group.id}>
+                {group.name}
+              </option>
+            ))}
+          </select>
+          {groups.length === 0 && (
+            <span className="mt-1.5 block text-xs text-amber-300">
+              请返回选择器，先新建一个个人模板分类
+            </span>
+          )}
         </label>
 
         <div>
@@ -338,6 +373,99 @@ function CustomTemplateEditor({
   );
 }
 
+function PersonalGroupEditor({
+  config,
+  existing,
+  onClose,
+  onSave,
+}: {
+  config: AnimaSelectorConfig;
+  existing: AnimaFavoriteGroup | null;
+  onClose: () => void;
+  onSave: (name: string) => Promise<void>;
+}) {
+  const [name, setName] = useState(existing?.name || '');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSave = async () => {
+    const value = name.trim();
+    if (!value) {
+      setError('请填写分类名称');
+      return;
+    }
+    setSaving(true);
+    setError('');
+    try {
+      await onSave(value);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : '分类保存失败');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[3200] flex flex-col bg-slate-950 text-slate-100"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`${existing ? '重命名' : '新建'}个人模板分类`}
+    >
+      <div className="flex items-center gap-3 border-b border-slate-700 bg-slate-900 px-4 py-3">
+        <button
+          type="button"
+          className="rounded-lg border border-slate-600 px-3 py-2 text-sm"
+          onClick={onClose}
+        >
+          返回
+        </button>
+        <div>
+          <div className="font-semibold">
+            {existing ? '重命名' : '新建'}个人{config.label}模板分类
+          </div>
+          <div className="text-xs text-slate-400">模板会按照这里创建的分类分别保存</div>
+        </div>
+      </div>
+      <div className="min-h-0 flex-1 p-4">
+        {error && (
+          <div className="mb-4 rounded-xl border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-200">
+            {error}
+          </div>
+        )}
+        <label className="block">
+          <span className="mb-1.5 block text-sm text-slate-300">分类名称</span>
+          <input
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder={`例如：常用${config.label}、室内场景`}
+            autoFocus
+            className="w-full rounded-xl border border-slate-600 bg-slate-900 px-3 py-3 text-base outline-none focus:border-cyan-400"
+          />
+        </label>
+      </div>
+      <div className="grid grid-cols-2 gap-3 border-t border-slate-700 bg-slate-900 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <button
+          type="button"
+          className="rounded-xl border border-slate-600 py-3 font-semibold"
+          onClick={onClose}
+        >
+          取消
+        </button>
+        <button
+          type="button"
+          disabled={saving}
+          onClick={() => void handleSave()}
+          className="rounded-xl bg-cyan-400 py-3 font-semibold text-slate-950 disabled:opacity-50"
+        >
+          {saving ? '正在保存……' : existing ? '保存名称' : '创建分类'}
+        </button>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 function SelectorModal({
   config,
   widget,
@@ -354,6 +482,7 @@ function SelectorModal({
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('all');
   const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [personalGroupId, setPersonalGroupId] = useState<string | null>(null);
   const [requestedPage, setRequestedPage] = useState(1);
   const [includeCharacterTags, setIncludeCharacterTags] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -361,6 +490,9 @@ function SelectorModal({
   const [saving, setSaving] = useState(false);
   const [savingFavoriteKeys, setSavingFavoriteKeys] = useState<Set<string>>(new Set());
   const [editingCustom, setEditingCustom] = useState<AnimaFavoriteItem | 'new' | null>(
+    null,
+  );
+  const [editingGroup, setEditingGroup] = useState<AnimaFavoriteGroup | 'new' | null>(
     null,
   );
   const [favoritesSection, setFavoritesSection] = useState<AnimaFavoritesSection>({
@@ -439,6 +571,17 @@ function SelectorModal({
     () => getAnimaCustomItems(favoritesSection),
     [favoritesSection],
   );
+  const personalGroups = useMemo(
+    () => favoritesSection.groups.filter((group) => group.id !== 'default'),
+    [favoritesSection.groups],
+  );
+  const uncategorizedCustomCount = useMemo(
+    () =>
+      customItems.filter(
+        (item) => !item.groupIds?.some((groupId) => groupId !== 'default'),
+      ).length,
+    [customItems],
+  );
   const allItems = useMemo(() => [...customItems, ...items], [customItems, items]);
 
   const favoriteKeys = useMemo(
@@ -452,14 +595,28 @@ function SelectorModal({
   );
 
   const matchingItems = useMemo(() => {
-    return allItems
+    const personalItems =
+      personalGroupId === null
+        ? []
+        : customItems.filter((item) =>
+            personalGroupId === UNCATEGORIZED_PERSONAL_GROUP
+              ? !item.groupIds?.some((groupId) => groupId !== 'default')
+              : item.groupIds?.includes(personalGroupId),
+          );
+    const sourceItems = personalGroupId === null ? items : personalItems;
+
+    return sourceItems
       .filter(
         (item) =>
-          item.isCustom || category === 'all' || item.categories?.includes(category),
+          personalGroupId !== null ||
+          category === 'all' ||
+          item.categories?.includes(category),
       )
       .filter(
         (item) =>
-          !favoritesOnly || item.isCustom || favoriteKeys.has(getAnimaItemKey(item)),
+          personalGroupId !== null ||
+          !favoritesOnly ||
+          favoriteKeys.has(getAnimaItemKey(item)),
       )
       .filter((item) => matchesAnimaItemSearch(item, query))
       .sort((a, b) => {
@@ -472,7 +629,16 @@ function SelectorModal({
         }
         return (b.post_count ?? 0) - (a.post_count ?? 0);
       });
-  }, [allItems, category, favoriteKeys, favoritesOnly, query, selected]);
+  }, [
+    category,
+    customItems,
+    favoriteKeys,
+    favoritesOnly,
+    items,
+    personalGroupId,
+    query,
+    selected,
+  ]);
 
   const pageData = useMemo(
     () => paginateAnimaItems(matchingItems, requestedPage, ITEMS_PER_PAGE),
@@ -542,7 +708,7 @@ function SelectorModal({
         name,
         nickname: draft.title,
         customContent: draft.content,
-        groupIds: existing?.groupIds?.length ? existing.groupIds : ['default'],
+        groupIds: [draft.groupId],
         isCustom: true,
       };
       if (uploadedImage) {
@@ -561,6 +727,7 @@ function SelectorModal({
         items: [...itemsWithoutCurrent, item],
       });
       setFavoritesSection(nextSection);
+      setPersonalGroupId(draft.groupId);
       setEditingCustom(null);
 
       if (
@@ -575,6 +742,92 @@ function SelectorModal({
         void deleteAnimaTemplateImage(uploadedImage.filename).catch(() => undefined);
       }
       throw reason;
+    }
+  };
+
+  const handleCreatePersonalGroup = async (name: string) => {
+    if (personalGroups.some((group) => group.name === name)) {
+      throw new Error('已经存在同名的个人模板分类');
+    }
+    setFavoriteError('');
+    const group = {
+      id: `group_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
+      name,
+      isSystem: false,
+    };
+    try {
+      const nextSection = await saveAnimaFavoritesSection(config.kind, {
+        groups: [...favoritesSection.groups, group],
+        items: favoritesSection.items,
+      });
+      setFavoritesSection(nextSection);
+      setPersonalGroupId(group.id);
+      setFavoritesOnly(false);
+      setCategory('all');
+      setRequestedPage(1);
+      setEditingGroup(null);
+    } catch (reason) {
+      const message = reason instanceof Error ? reason.message : '分类创建失败';
+      setFavoriteError(message);
+      throw new Error(message);
+    }
+  };
+
+  const handleRenamePersonalGroup = async (name: string) => {
+    const group = personalGroups.find((item) => item.id === personalGroupId);
+    if (!group) return;
+    if (!name || name === group.name) {
+      setEditingGroup(null);
+      return;
+    }
+    if (personalGroups.some((item) => item.id !== group.id && item.name === name)) {
+      throw new Error('已经存在同名的个人模板分类');
+    }
+    setFavoriteError('');
+    try {
+      const nextSection = await saveAnimaFavoritesSection(config.kind, {
+        groups: favoritesSection.groups.map((item) =>
+          item.id === group.id ? { ...item, name } : item,
+        ),
+        items: favoritesSection.items,
+      });
+      setFavoritesSection(nextSection);
+      setEditingGroup(null);
+    } catch (reason) {
+      const message = reason instanceof Error ? reason.message : '分类重命名失败';
+      setFavoriteError(message);
+      throw new Error(message);
+    }
+  };
+
+  const handleDeletePersonalGroup = async () => {
+    const group = personalGroups.find((item) => item.id === personalGroupId);
+    if (!group) return;
+    if (
+      !window.confirm(
+        `确定删除分类“${group.name}”吗？分类中的个人模板不会删除，会转入“未分类模板”。`,
+      )
+    ) {
+      return;
+    }
+    setFavoriteError('');
+    try {
+      const nextSection = await saveAnimaFavoritesSection(config.kind, {
+        groups: favoritesSection.groups.filter((item) => item.id !== group.id),
+        items: favoritesSection.items.map((item) =>
+          item.isCustom && item.groupIds?.includes(group.id)
+            ? {
+                ...item,
+                groupIds: item.groupIds.filter((groupId) => groupId !== group.id),
+              }
+            : item,
+        ),
+      });
+      setFavoritesSection(nextSection);
+      setPersonalGroupId(UNCATEGORIZED_PERSONAL_GROUP);
+      setRequestedPage(1);
+    } catch (reason) {
+      setFavoriteError(reason instanceof Error ? reason.message : '分类删除失败');
     }
   };
 
@@ -665,11 +918,12 @@ function SelectorModal({
           autoFocus
           className="w-full rounded-xl border border-slate-600 bg-slate-950 px-3 py-3 text-base text-slate-100 outline-none focus:border-cyan-400"
         />
-        {categories.length > 0 && (
+        {categories.length > 0 && personalGroupId === null && (
           <select
             value={category}
             onChange={(event) => {
               setCategory(event.target.value);
+              setFavoritesOnly(false);
               setRequestedPage(1);
             }}
             className="w-full rounded-xl border border-slate-600 bg-slate-950 px-3 py-3 text-slate-100"
@@ -688,6 +942,7 @@ function SelectorModal({
           disabled={loadingFavorites}
           onClick={() => {
             setFavoritesOnly((value) => !value);
+            setPersonalGroupId(null);
             setRequestedPage(1);
           }}
           className={`rounded-xl border px-3 py-3 text-left text-sm font-semibold disabled:opacity-50 ${
@@ -697,18 +952,83 @@ function SelectorModal({
           }`}
         >
           {favoritesOnly
-            ? '♥ 正在查看我的收藏和个人模板'
-            : `♡ 我的收藏（${favoriteKeys.size + customItems.length}）`}
+            ? '♥ 正在查看我的收藏'
+            : `♡ 我的收藏（${favoriteKeys.size}）`}
         </button>
         {config.kind !== 'artist' && (
-          <button
-            type="button"
-            disabled={loadingFavorites}
-            onClick={() => setEditingCustom('new')}
-            className="rounded-xl border border-cyan-500/60 bg-cyan-500/10 px-3 py-3 text-left text-sm font-semibold text-cyan-100 disabled:opacity-50"
-          >
-            ＋ 新建个人{config.label}模板
-          </button>
+          <div className="grid gap-2 rounded-xl border border-cyan-500/30 bg-cyan-500/5 p-2">
+            <div className="flex gap-2">
+              <select
+                aria-label="个人模板分类"
+                value={personalGroupId ?? ''}
+                disabled={loadingFavorites}
+                onChange={(event) => {
+                  setPersonalGroupId(event.target.value || null);
+                  setFavoritesOnly(false);
+                  setCategory('all');
+                  setRequestedPage(1);
+                }}
+                className="min-w-0 flex-1 rounded-lg border border-slate-600 bg-slate-950 px-3 py-2.5 text-sm text-slate-100"
+              >
+                <option value="">选择个人模板分类</option>
+                {uncategorizedCustomCount > 0 && (
+                  <option value={UNCATEGORIZED_PERSONAL_GROUP}>
+                    未分类模板（{uncategorizedCustomCount}）
+                  </option>
+                )}
+                {personalGroups.map((group) => {
+                  const count = customItems.filter((item) =>
+                    item.groupIds?.includes(group.id),
+                  ).length;
+                  return (
+                    <option key={group.id} value={group.id}>
+                      {group.name}（{count}）
+                    </option>
+                  );
+                })}
+              </select>
+              <button
+                type="button"
+                disabled={loadingFavorites}
+                onClick={() => setEditingGroup('new')}
+                className="shrink-0 rounded-lg border border-cyan-500/60 px-3 py-2.5 text-sm font-semibold text-cyan-100 disabled:opacity-50"
+              >
+                ＋ 分类
+              </button>
+            </div>
+            {personalGroupId && personalGroupId !== UNCATEGORIZED_PERSONAL_GROUP && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setEditingCustom('new')}
+                  className="rounded-lg border border-cyan-500/60 bg-cyan-500/10 px-3 py-2.5 text-left text-sm font-semibold text-cyan-100"
+                >
+                  ＋ 在当前分类中新建个人{config.label}模板
+                </button>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const group = personalGroups.find(
+                        (item) => item.id === personalGroupId,
+                      );
+                      if (group) setEditingGroup(group);
+                    }}
+                    className="rounded-lg border border-slate-600 px-3 py-2 text-xs text-slate-300"
+                  >
+                    重命名分类
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleDeletePersonalGroup()}
+                    className="rounded-lg border border-red-500/40 px-3 py-2 text-xs text-red-300"
+                  >
+                    删除分类
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         )}
         {config.kind === 'character' && (
           <label className="flex items-center gap-2 text-sm text-slate-300">
@@ -744,9 +1064,13 @@ function SelectorModal({
         )}
         {!loading && pageData.items.length === 0 && !error && (
           <div className="py-12 text-center text-slate-400">
-            {favoritesOnly
-              ? '收藏栏还是空的，可以添加收藏或新建个人模板'
-              : '没有找到匹配内容'}
+            {personalGroupId
+              ? personalGroupId === UNCATEGORIZED_PERSONAL_GROUP
+                ? '没有未分类的个人模板'
+                : '这个分类还没有个人模板，可以点击上方按钮新建'
+              : favoritesOnly
+                ? '收藏栏还是空的，可以在正式卡片上点击爱心收藏'
+                : '没有找到匹配内容'}
           </div>
         )}
         <div className="grid grid-cols-2 gap-3">
@@ -882,9 +1206,27 @@ function SelectorModal({
         <CustomTemplateEditor
           config={config}
           existing={editingCustom === 'new' ? null : editingCustom}
+          groups={personalGroups}
+          initialGroupId={
+            personalGroupId && personalGroupId !== UNCATEGORIZED_PERSONAL_GROUP
+              ? personalGroupId
+              : undefined
+          }
           onClose={() => setEditingCustom(null)}
           onSave={(draft) =>
             handleSaveCustom(editingCustom === 'new' ? null : editingCustom, draft)
+          }
+        />
+      )}
+      {editingGroup && (
+        <PersonalGroupEditor
+          config={config}
+          existing={editingGroup === 'new' ? null : editingGroup}
+          onClose={() => setEditingGroup(null)}
+          onSave={(name) =>
+            editingGroup === 'new'
+              ? handleCreatePersonalGroup(name)
+              : handleRenamePersonalGroup(name)
           }
         />
       )}

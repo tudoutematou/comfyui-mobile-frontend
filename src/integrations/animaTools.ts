@@ -24,6 +24,7 @@ export interface AnimaSelectorItem {
   aliases?: string | string[];
   isCustom?: boolean;
   customContent?: string;
+  groupIds?: string[];
 }
 
 export interface AnimaSelectorConfig {
@@ -486,6 +487,7 @@ export function getAnimaCustomItems(
       preview: item.preview,
       isCustom: true,
       customContent: item.customContent,
+      groupIds: Array.isArray(item.groupIds) ? [...item.groupIds] : [],
     }));
 }
 
