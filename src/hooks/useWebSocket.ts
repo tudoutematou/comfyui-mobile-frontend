@@ -760,6 +760,11 @@ export function useWebSocket() {
     };
 
     const handleBinaryMessage = (data: ArrayBuffer) => {
+      // Defensively ignore latent-preview frames while previews are disabled.
+      // Current ComfyUI versions honor the explicit "none" sent with a queued
+      // prompt, but this also protects phones from older backends (or prompts
+      // queued elsewhere) that continue to stream high-frequency image frames.
+      if (useGenerationSettingsStore.getState().previewMethod === 'none') return;
       if (data.byteLength < 8) return;
 
       const view = new DataView(data);

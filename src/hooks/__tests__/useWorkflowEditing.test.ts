@@ -15,7 +15,11 @@ import { useWorkflowHiddenStore } from '../useWorkflowHidden';
 import { useBookmarksStore } from '../useBookmarks';
 import { useWorkflowErrorsStore } from '../useWorkflowErrors';
 import { useSeedStore } from '../useSeed';
-import { queueAndGetEmbeddedWorkflow } from './helpers/queueAndGetEmbeddedWorkflow';
+import { useGenerationSettingsStore } from '../useGenerationSettings';
+import {
+  queueAndGetEmbeddedWorkflow,
+  queueAndGetPromptRequest,
+} from './helpers/queueAndGetEmbeddedWorkflow';
 
 function makeNode(id: number, overrides?: Partial<WorkflowNode>): WorkflowNode {
   return {
@@ -158,6 +162,7 @@ beforeEach(() => {
     seedModes: {},
     seedLastValues: {},
   });
+  useGenerationSettingsStore.setState({ previewMethod: 'none' });
 });
 
 afterEach(() => {
@@ -203,6 +208,22 @@ describe('setSavedWorkflow hidden carry-over', () => {
 });
 
 describe('useWorkflow editing actions', () => {
+  it.each(['none', 'latent2rgb'] as const)(
+    'sends the selected %s preview method with every queued prompt',
+    async (previewMethod) => {
+      useGenerationSettingsStore.setState({ previewMethod });
+      useWorkflowStore.setState({
+        workflow: makeWorkflow([makeNode(1)], []),
+        nodeTypes: queueNodeTypes,
+        ...rootNodeStableRegistry([1]),
+      });
+
+      const request = await queueAndGetPromptRequest();
+
+      expect(request.extra_data?.preview_method).toBe(previewMethod);
+    },
+  );
+
   it('keeps only the most recently activated connection highlight', () => {
     useWorkflowStore.setState({
       ...rootNodeStableRegistry([1, 2]),

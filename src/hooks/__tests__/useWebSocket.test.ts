@@ -30,6 +30,7 @@ interface WebSocketCallbacks {
   onOpen?: ConnectArgs[2];
   onClose?: ConnectArgs[3];
   onError?: ConnectArgs[4];
+  onBinaryMessage?: ConnectArgs[5];
 }
 
 const mockConnectWebSocket = vi.mocked(connectWebSocket);
@@ -59,12 +60,12 @@ describe('backend reconnect notices', () => {
     mockGetQueue.mockResolvedValue({ queue_running: [], queue_pending: [] });
     mockGetHistory.mockResolvedValue({});
     mockConnectWebSocket.mockImplementation(
-      (_clientId, _onMessage, onOpen, onClose, onError) => {
+      (_clientId, _onMessage, onOpen, onClose, onError, onBinaryMessage) => {
         const socket = {
           readyState: WebSocket.OPEN,
           close: vi.fn(),
         } as unknown as WebSocket;
-        callbacks.push({ onOpen, onClose, onError });
+        callbacks.push({ onOpen, onClose, onError, onBinaryMessage });
         sockets.push(socket);
         return socket;
       },
@@ -125,6 +126,7 @@ describe('backend reconnect notices', () => {
     });
     container.remove();
     vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 
   function seedRecoverableJob(promptId: string) {
@@ -168,6 +170,23 @@ describe('backend reconnect notices', () => {
       await callbacks[1].onOpen?.();
     });
   }
+
+  it('drops binary latent previews before allocating blobs when previews are disabled', async () => {
+    const createObjectURL = vi.spyOn(URL, 'createObjectURL');
+    useGenerationSettingsStore.setState({ previewMethod: 'none' });
+
+    await act(async () => {
+      root.render(createElement(WebSocketHarness));
+    });
+
+    const frame = new ArrayBuffer(12);
+    const view = new DataView(frame);
+    view.setUint32(0, 1, false);
+    view.setUint32(4, 2, false);
+    callbacks[0].onBinaryMessage?.(frame);
+
+    expect(createObjectURL).not.toHaveBeenCalled();
+  });
 
   it('surfaces a backend interruption only after a long outage that lost jobs', async () => {
     seedRecoverableJob('lost-prompt');
