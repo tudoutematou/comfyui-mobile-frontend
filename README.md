@@ -44,6 +44,7 @@ So this mobile frontend is my attempt at improving upon the user experience of C
   - scroll through generation history and load or copy workflows of anything you want to iterate on
 ### ☑️ **Media Viewer:** Full-screen viewer with convenient controls and familar gesture support
   - support for images and videos
+  - automatically retries output images that are briefly unavailable and provides an in-view retry action instead of leaving a permanent black screen
   - inspect image metadata (just a few core attributes for now)
   - mark outputs as favorites so you can find them with filters later
   - download outputs directly to your device with one click

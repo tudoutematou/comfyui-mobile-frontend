@@ -358,4 +358,64 @@ describe('MediaViewer workflow availability', () => {
 
     expect(document.querySelector('[role="status"]')).toBeNull();
   });
+
+  it('retries a failed image and exposes recovery controls instead of staying black', async () => {
+    vi.useFakeTimers();
+    const item = makeImageItem('output/retry.png', 'retry.png');
+
+    await act(async () => {
+      root.render(
+        <MediaViewer
+          open={true}
+          items={[item]}
+          index={0}
+          onIndexChange={() => {}}
+          onClose={() => {}}
+          onDelete={() => {}}
+          onLoadWorkflow={() => {}}
+          onLoadInWorkflow={() => {}}
+        />,
+      );
+    });
+
+    const failCurrentRequest = async () => {
+      await act(async () => {
+        document
+          .querySelector('#media-viewer-overlay img')
+          ?.dispatchEvent(new Event('error'));
+        await Promise.resolve();
+      });
+    };
+
+    await failCurrentRequest();
+    await act(async () => {
+      vi.advanceTimersByTime(400);
+    });
+    expect(document.querySelector<HTMLImageElement>('#media-viewer-overlay img')?.src)
+      .toContain('_comfy_mobile_retry=1');
+
+    await failCurrentRequest();
+    await act(async () => {
+      vi.advanceTimersByTime(1000);
+    });
+    expect(document.querySelector<HTMLImageElement>('#media-viewer-overlay img')?.src)
+      .toContain('_comfy_mobile_retry=2');
+
+    await failCurrentRequest();
+    await act(async () => {
+      vi.advanceTimersByTime(2000);
+    });
+    expect(document.querySelector<HTMLImageElement>('#media-viewer-overlay img')?.src)
+      .toContain('_comfy_mobile_retry=3');
+
+    await failCurrentRequest();
+    expect(document.querySelector('[role="alert"]')?.textContent).toContain('图片加载失败');
+
+    await act(async () => {
+      (document.querySelector('[role="alert"] button') as HTMLButtonElement | null)?.click();
+    });
+    expect(document.querySelector('[role="alert"]')).toBeNull();
+    expect(document.querySelector<HTMLImageElement>('#media-viewer-overlay img')?.src)
+      .toContain('_comfy_mobile_retry=4');
+  });
 });
